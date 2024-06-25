@@ -97,4 +97,4 @@ NeuroNexus Omega is a theoretical implementation and includes speculative concep
 
 ## Contact
 
-For questions or feedback, please contact [Your Name] at [your.email@example.com].
+For questions or feedback, please contact [sanowl] at [sanowl98@gmail.com].
