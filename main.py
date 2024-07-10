@@ -1,32 +1,27 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
-from typing import Dict, List, Tuple, Any
-from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister, execute, Aer
-from sympy import Symbol, sympify, lambdify
-from z3 import *
-import networkx as nx
-from pyvis.network import Network
-import matplotlib.pyplot as plt
-from torch.utils.data import DataLoader
-from torch.nn.parallel import DistributedDataParallel
+from typing import Dict, Tuple, List
+from qiskit import QuantumCircuit, execute, Aer
 
 class QuantumTensorNetwork(nn.Module):
     def __init__(self, n_qubits: int, bond_dim: int):
         super().__init__()
         self.n_qubits = n_qubits
         self.bond_dim = bond_dim
-        self.tensors = nn.ParameterList([nn.Parameter(torch.randn(2, bond_dim, bond_dim)) for _ in range(n_qubits)])
+        self.tensors = nn.ParameterList([
+            nn.Parameter(torch.randn(2, bond_dim, bond_dim)) 
+            for _ in range(n_qubits)
+        ])
         self.entanglement = nn.Parameter(torch.randn(n_qubits, n_qubits))
-    
+
     def apply_quantum_gate(self, x: torch.Tensor) -> torch.Tensor:
         return torch.matmul(x, self.entanglement.exp())
-    
+
     def contract(self, input_state: torch.Tensor) -> torch.Tensor:
         state = self.apply_quantum_gate(input_state)
-        for i in range(self.n_qubits):
-            state = torch.einsum('bi,ijk->bjk', state, self.tensors[i])
+        for tensor in self.tensors:
+            state = torch.einsum('bi,ijk->bjk', state, tensor)
         return state.squeeze()
 
 class NeuroplasticLayer(nn.Module):
@@ -36,13 +31,16 @@ class NeuroplasticLayer(nn.Module):
         self.bias = nn.Parameter(torch.zeros(output_dim))
         self.plasticity = nn.Parameter(torch.ones(input_dim, output_dim))
         self.activation_history = torch.zeros(input_dim, output_dim)
-    
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        activation = F.linear(x, self.weight, self.bias)
+
+    def update_plasticity(self, activation: torch.Tensor):
         self.activation_history = 0.99 * self.activation_history + 0.01 * activation.abs().mean(0)
         plasticity_update = 0.001 * (self.activation_history - self.activation_history.mean())
         self.plasticity.data += plasticity_update
         self.weight.data += 0.01 * self.plasticity * torch.randn_like(self.weight)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        activation = F.linear(x, self.weight, self.bias)
+        self.update_plasticity(activation)
         return activation
 
 class FractalAttention(nn.Module):
@@ -53,19 +51,22 @@ class FractalAttention(nn.Module):
         self.heads = heads
         self.weights = nn.Parameter(torch.randn(depth, heads, dim, dim))
         self.head_mixing = nn.Linear(dim * heads, dim)
-    
+
+    def apply_fractal(self, x: torch.Tensor, depth: int) -> torch.Tensor:
+        if depth == 0:
+            return x
+        half = x.shape[1] // 2
+        left = self.apply_fractal(x[:, :half], depth - 1)
+        right = self.apply_fractal(x[:, half:], depth - 1)
+        combined = torch.cat([left, right], dim=-1)
+        multi_head = torch.stack([
+            torch.matmul(combined, self.weights[depth - 1, i]) 
+            for i in range(self.heads)
+        ])
+        return self.head_mixing(multi_head.transpose(0, 1).contiguous().view(*combined.shape[:-1], -1))
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        def apply_fractal(x: torch.Tensor, depth: int) -> torch.Tensor:
-            if depth == 0:
-                return x
-            half = x.shape[1] // 2
-            left = apply_fractal(x[:, :half], depth - 1)
-            right = apply_fractal(x[:, half:], depth - 1)
-            combined = torch.cat([left, right], dim=-1)
-            multi_head = torch.stack([torch.matmul(combined, self.weights[depth - 1, i]) for i in range(self.heads)])
-            return self.head_mixing(multi_head.transpose(0, 1).contiguous().view(*combined.shape[:-1], -1))
-        
-        return apply_fractal(x, self.depth)
+        return self.apply_fractal(x, self.depth)
 
 class AdaptiveCompressionExpansion(nn.Module):
     def __init__(self, dim: int, max_expansion: int):
@@ -75,13 +76,12 @@ class AdaptiveCompressionExpansion(nn.Module):
         self.compression = nn.Linear(dim * max_expansion, dim)
         self.expansion = nn.Linear(dim, dim * max_expansion)
         self.gate = nn.Linear(dim, max_expansion)
-    
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         expansion_factors = F.softmax(self.gate(x), dim=-1)
         expanded = self.expansion(x).view(*x.shape[:-1], self.max_expansion, self.dim)
         gated_expansion = (expanded * expansion_factors.unsqueeze(-1)).sum(dim=-2)
-        compressed = self.compression(gated_expansion)
-        return compressed
+        return self.compression(gated_expansion)
 
 class MultimodalFusion(nn.Module):
     def __init__(self, text_dim: int, image_dim: int, audio_dim: int, output_dim: int):
@@ -91,7 +91,7 @@ class MultimodalFusion(nn.Module):
         self.audio_proj = nn.Linear(audio_dim, output_dim)
         self.cross_attn = nn.MultiheadAttention(output_dim, 8)
         self.fusion_layer = nn.TransformerEncoderLayer(output_dim, 8)
-    
+
     def forward(self, text: torch.Tensor, image: torch.Tensor, audio: torch.Tensor) -> torch.Tensor:
         text_proj = self.text_proj(text)
         image_proj = self.image_proj(image)
@@ -104,8 +104,8 @@ class EnhancedMetaLearning(nn.Module):
         super().__init__()
         self.model = model
         self.meta_optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-        self.task_embedding = nn.Embedding(1000, model.dim)  # Assume up to 1000 tasks
-    
+        self.task_embedding = nn.Embedding(1000, model.dim)
+
     def adapt(self, support_set: Tuple[torch.Tensor, torch.Tensor], task_id: int, steps: int = 5):
         x_support, y_support = support_set
         task_emb = self.task_embedding(torch.tensor([task_id]))
@@ -115,7 +115,7 @@ class EnhancedMetaLearning(nn.Module):
             loss = F.cross_entropy(outputs['output'], y_support)
             loss.backward()
             self.meta_optimizer.step()
-    
+
     def forward(self, x: torch.Tensor, task_id: int) -> Dict[str, torch.Tensor]:
         task_emb = self.task_embedding(torch.tensor([task_id]))
         return self.model(x, task_emb=task_emb)
@@ -126,28 +126,25 @@ class SelfSupervisedPretraining(nn.Module):
         self.model = model
         self.mlm_head = nn.Linear(model.dim, vocab_size)
         self.nsp_head = nn.Linear(model.dim, 2)
-        self.contrastive_head = nn.Linear(model.dim, 128)  # For contrastive learning
-    
+        self.contrastive_head = nn.Linear(model.dim, 128)
+
     def masked_language_modeling(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         outputs = self.model(x)['output']
         mlm_outputs = self.mlm_head(outputs)
-        mlm_loss = F.cross_entropy(mlm_outputs[mask], x[mask])
-        return mlm_loss
-    
+        return F.cross_entropy(mlm_outputs[mask], x[mask])
+
     def next_sentence_prediction(self, x1: torch.Tensor, x2: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
         outputs1 = self.model(x1)['output'][:, 0, :]
         outputs2 = self.model(x2)['output'][:, 0, :]
         nsp_outputs = self.nsp_head(torch.cat([outputs1, outputs2], dim=-1))
-        nsp_loss = F.cross_entropy(nsp_outputs, labels)
-        return nsp_loss
-    
+        return F.cross_entropy(nsp_outputs, labels)
+
     def contrastive_learning(self, x: torch.Tensor, augmented_x: torch.Tensor) -> torch.Tensor:
         output1 = self.contrastive_head(self.model(x)['output'][:, 0, :])
         output2 = self.contrastive_head(self.model(augmented_x)['output'][:, 0, :])
         similarity = F.cosine_similarity(output1.unsqueeze(1), output2.unsqueeze(0), dim=2)
         labels = torch.arange(x.size(0)).to(x.device)
-        contrastive_loss = F.cross_entropy(similarity, labels)
-        return contrastive_loss
+        return F.cross_entropy(similarity, labels)
 
 class NeuroSymbolicReasoning(nn.Module):
     def __init__(self, dim: int, num_symbols: int, num_rules: int):
@@ -159,12 +156,14 @@ class NeuroSymbolicReasoning(nn.Module):
             nn.Linear(dim, num_symbols)
         )
         self.rules = nn.Parameter(torch.randn(num_rules, num_symbols))
-    
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         symbols = self.symbol_embeddings(torch.arange(self.symbol_embeddings.num_embeddings).to(x.device))
         symbol_activations = torch.matmul(x, symbols.t())
-        rule_inputs = torch.cat([x.unsqueeze(1).expand(-1, self.rules.size(0), -1), 
-                                 self.rules.unsqueeze(0).expand(x.size(0), -1, -1)], dim=-1)
+        rule_inputs = torch.cat([
+            x.unsqueeze(1).expand(-1, self.rules.size(0), -1),
+            self.rules.unsqueeze(0).expand(x.size(0), -1, -1)
+        ], dim=-1)
         rule_outputs = self.rule_network(rule_inputs)
         reasoning_output = torch.matmul(F.softmax(rule_outputs, dim=-1), symbols)
         return x + reasoning_output
@@ -178,7 +177,7 @@ class EthicalReasoningModule(nn.Module):
             nn.ReLU(),
             nn.Linear(dim, 1)
         )
-    
+
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         ethical_alignment = F.cosine_similarity(x.unsqueeze(1), self.principles.unsqueeze(0), dim=-1)
         ethical_score = self.ethical_scorer(x).squeeze(-1)
@@ -190,7 +189,7 @@ class TemporalRecursionModule(nn.Module):
         super().__init__()
         self.temporal_transform = nn.Linear(dim * 2, dim)
         self.num_steps = num_steps
-    
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         batch_size, seq_len, _ = x.shape
         temporal_state = x[:, -1, :]
@@ -206,7 +205,7 @@ class MultiversalInferenceEngine(nn.Module):
         super().__init__()
         self.universe_projections = nn.ModuleList([nn.Linear(dim, dim) for _ in range(num_universes)])
         self.universe_selection = nn.Linear(dim, num_universes)
-    
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         universe_outputs = torch.stack([proj(x) for proj in self.universe_projections])
         selection_weights = F.softmax(self.universe_selection(x.mean(dim=1)), dim=-1)
@@ -237,7 +236,7 @@ class NeuroNexusOmega(nn.Module):
         self.output = nn.Linear(dim, vocab_size)
         self.meta_learning = EnhancedMetaLearning(self)
         self.self_supervised = SelfSupervisedPretraining(self, vocab_size)
-    
+
     def forward(self, x: torch.Tensor, image: torch.Tensor = None, audio: torch.Tensor = None, task_emb: torch.Tensor = None) -> Dict[str, torch.Tensor]:
         x = self.embedding(x) + self.positional_encoding[:x.size(1)]
         quantum_out = self.quantum_tensor_network(x)
@@ -271,6 +270,8 @@ class NeuroNexusOmega(nn.Module):
             'multiversal_output': multiversal_out
         }
 
+   
+
     def pretrain(self, x: torch.Tensor, mlm_mask: torch.Tensor, nsp_x1: torch.Tensor, nsp_x2: torch.Tensor, nsp_labels: torch.Tensor, augmented_x: torch.Tensor):
         mlm_loss = self.self_supervised.masked_language_modeling(x, mlm_mask)
         nsp_loss = self.self_supervised.next_sentence_prediction(nsp_x1, nsp_x2, nsp_labels)
@@ -280,8 +281,8 @@ class NeuroNexusOmega(nn.Module):
 class QuantumClassicalOptimizer(torch.optim.Optimizer):
     def __init__(self, params, lr=1e-3, momentum=0.9):
         defaults = dict(lr=lr, momentum=momentum)
-        super(QuantumClassicalOptimizer, self).__init__(params, defaults)
-        self.quantum_circuit = QuantumCircuit(10)  # 10-qubit quantum circuit for optimization
+        super().__init__(params, defaults)
+        self.quantum_circuit = QuantumCircuit(10)
 
     def step(self, closure=None):
         loss = None
@@ -294,7 +295,6 @@ class QuantumClassicalOptimizer(torch.optim.Optimizer):
                     continue
                 d_p = p.grad.data
 
-                # Classical momentum update
                 param_state = self.state[p]
                 if 'momentum_buffer' not in param_state:
                     buf = param_state['momentum_buffer'] = torch.clone(d_p).detach()
@@ -302,8 +302,7 @@ class QuantumClassicalOptimizer(torch.optim.Optimizer):
                     buf = param_state['momentum_buffer']
                     buf.mul_(group['momentum']).add_(d_p)
 
-                # Quantum-inspired update
-                quantum_state = torch.tensor([buf.norm().item()] + [0] * 9)  # Use gradient norm as initial state
+                quantum_state = torch.tensor([buf.norm().item()] + [0] * 9)
                 for i in range(10):
                     self.quantum_circuit.rx(quantum_state[i], i)
                     self.quantum_circuit.ry(quantum_state[i], i)
@@ -315,7 +314,7 @@ class QuantumClassicalOptimizer(torch.optim.Optimizer):
 
         return loss
 
-def train_neuronexus_omega(model: NeuroNexusOmega, train_loader: DataLoader, num_epochs: int, device: torch.device):
+def train_neuronexus_omega(model: NeuroNexusOmega, train_loader: torch.utils.data.DataLoader, num_epochs: int, device: torch.device):
     optimizer = QuantumClassicalOptimizer(model.parameters())
     model.to(device)
 
@@ -327,23 +326,20 @@ def train_neuronexus_omega(model: NeuroNexusOmega, train_loader: DataLoader, num
             inputs, targets = batch
             inputs, targets = inputs.to(device), targets.to(device)
             
-            # Forward pass
             outputs = model(inputs)
             loss = F.cross_entropy(outputs['output'].view(-1, outputs['output'].size(-1)), targets.view(-1))
             
-            # Add ethical loss
-            ethical_loss = -outputs['ethical_scores'].mean()  # Encourage higher ethical scores
+            ethical_loss = -outputs['ethical_scores'].mean()
             loss += 0.1 * ethical_loss
             
-            # Backward pass and optimize
             loss.backward()
             optimizer.step()
             
             total_loss += loss.item()
         
-        print(f"Epoch {epoch+1}/{num_epochs}, Loss: {total_loss/len(train_loader)}")
+        print(f"Epoch {epoch+1}/{num_epochs}, Loss: {total_loss/len(train_loader):.4f}")
 
-def meta_train_neuronexus_omega(model: NeuroNexusOmega, task_loader: DataLoader, num_epochs: int, device: torch.device):
+def meta_train_neuronexus_omega(model: NeuroNexusOmega, task_loader: torch.utils.data.DataLoader, num_epochs: int, device: torch.device):
     meta_optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     model.to(device)
 
@@ -359,66 +355,58 @@ def meta_train_neuronexus_omega(model: NeuroNexusOmega, task_loader: DataLoader,
                 x_support, y_support = x_support.to(device), y_support.to(device)
                 x_query, y_query = x_query.to(device), y_query.to(device)
                 
-                # Adapt to the task
                 model.meta_learning.adapt((x_support, y_support), task_id)
                 
-                # Evaluate on query set
                 with torch.no_grad():
                     query_outputs = model.meta_learning(x_query, task_id)
                     task_loss = F.cross_entropy(query_outputs['output'].view(-1, query_outputs['output'].size(-1)), y_query.view(-1))
                 task_losses.append(task_loss)
             
-            # Meta-update
             meta_loss = torch.stack(task_losses).mean()
             meta_loss.backward()
             meta_optimizer.step()
             
             total_meta_loss += meta_loss.item()
         
-        print(f"Meta Epoch {epoch+1}/{num_epochs}, Meta Loss: {total_meta_loss/len(task_loader)}")
+        print(f"Meta Epoch {epoch+1}/{num_epochs}, Meta Loss: {total_meta_loss/len(task_loader):.4f}")
 
-# Example usage
-vocab_size = 50000
-dim = 1024
-n_qubits = 100
-n_layers = 12
-n_heads = 16
-max_seq_len = 512
+def main():
+    vocab_size = 50000
+    dim = 1024
+    n_qubits = 100
+    n_layers = 12
+    n_heads = 16
+    max_seq_len = 512
 
-model = NeuroNexusOmega(vocab_size, dim, n_qubits, n_layers, n_heads, max_seq_len)
+    model = NeuroNexusOmega(vocab_size, dim, n_qubits, n_layers, n_heads, max_seq_len)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Simulating inputs
-x = torch.randint(0, vocab_size, (1, 100))
-image = torch.randn(1, 100, dim)
-audio = torch.randn(1, 100, dim)
+    x = torch.randint(0, vocab_size, (1, 100))
+    image = torch.randn(1, 100, dim)
+    audio = torch.randn(1, 100, dim)
 
-# Forward pass
-output = model(x, image, audio)
+    output = model(x, image, audio)
 
-print(f"Output shape: {output['output'].shape}")
-print(f"Hidden state shape: {output['hidden_state'].shape}")
-print(f"Ethical scores shape: {output['ethical_scores'].shape}")
-print(f"Temporal output shape: {output['temporal_output'].shape}")
-print(f"Multiversal output shape: {output['multiversal_output'].shape}")
+    print(f"Output shape: {output['output'].shape}")
+    print(f"Hidden state shape: {output['hidden_state'].shape}")
+    print(f"Ethical scores shape: {output['ethical_scores'].shape}")
+    print(f"Temporal output shape: {output['temporal_output'].shape}")
+    print(f"Multiversal output shape: {output['multiversal_output'].shape}")
 
-# Simulating pretraining
-mlm_mask = torch.randint(0, 2, (1, 100)).bool()
-nsp_x1 = torch.randint(0, vocab_size, (1, 50))
-nsp_x2 = torch.randint(0, vocab_size, (1, 50))
-nsp_labels = torch.randint(0, 2, (1,))
-augmented_x = torch.randint(0, vocab_size, (1, 100))
+    mlm_mask = torch.randint(0, 2, (1, 100)).bool()
+    nsp_x1 = torch.randint(0, vocab_size, (1, 50))
+    nsp_x2 = torch.randint(0, vocab_size, (1, 50))
+    nsp_labels = torch.randint(0, 2, (1,))
+    augmented_x = torch.randint(0, vocab_size, (1, 100))
 
-pretrain_loss = model.pretrain(x, mlm_mask, nsp_x1, nsp_x2, nsp_labels, augmented_x)
-print(f"Pretraining loss: {pretrain_loss.item()}")
+    pretrain_loss = model.pretrain(x, mlm_mask, nsp_x1, nsp_x2, nsp_labels, augmented_x)
+    print(f"Pretraining loss: {pretrain_loss.item():.4f}")
 
-# Simulating meta-learning adaptation
-support_set = (torch.randint(0, vocab_size, (5, 100)), torch.randint(0, vocab_size, (5,)))
-model.meta_learning.adapt(support_set, task_id=0)
+    support_set = (torch.randint(0, vocab_size, (5, 100)), torch.randint(0, vocab_size, (5,)))
+    model.meta_learning.adapt(support_set, task_id=0)
 
-# Adapted forward pass
-adapted_output = model.meta_learning(x, task_id=0)
-print(f"Adapted output shape: {adapted_output['output'].shape}")
+    adapted_output = model.meta_learning(x, task_id=0)
+    print(f"Adapted output shape: {adapted_output['output'].shape}")
 
-# Note: To actually train this model, you would need to create appropriate DataLoaders and call the training functions:
-# train_neuronexus_omega(model, train_loader, num_epochs=10, device=torch.device("cuda"))
-# meta_train_neuronexus_omega(model, task_loader, num_epochs=5, device=torch.device("cuda"))
+if __name__ == "__main__":
+    main()
