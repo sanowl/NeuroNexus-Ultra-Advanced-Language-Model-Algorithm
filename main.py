@@ -3,7 +3,20 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Dict, Tuple, List
 from qiskit import QuantumCircuit, execute, Aer
+import math
+import numpy as mp  
+# Configuration
+class Config:
+    VOCAB_SIZE = 50000
+    DIM = 1024
+    N_QUBITS = 100
+    N_LAYERS = 12
+    N_HEADS = 16
+    MAX_SEQ_LEN = 512
+    LEARNING_RATE = 1e-3
+    MOMENTUM = 0.9
 
+# Quantum Tensor Network
 class QuantumTensorNetwork(nn.Module):
     def __init__(self, n_qubits: int, bond_dim: int):
         super().__init__()
@@ -24,6 +37,7 @@ class QuantumTensorNetwork(nn.Module):
             state = torch.einsum('bi,ijk->bjk', state, tensor)
         return state.squeeze()
 
+# Neuroplastic Layer
 class NeuroplasticLayer(nn.Module):
     def __init__(self, input_dim: int, output_dim: int):
         super().__init__()
@@ -43,6 +57,7 @@ class NeuroplasticLayer(nn.Module):
         self.update_plasticity(activation)
         return activation
 
+# Fractal Attention
 class FractalAttention(nn.Module):
     def __init__(self, dim: int, depth: int, heads: int):
         super().__init__()
@@ -68,6 +83,7 @@ class FractalAttention(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.apply_fractal(x, self.depth)
 
+# Adaptive Compression Expansion
 class AdaptiveCompressionExpansion(nn.Module):
     def __init__(self, dim: int, max_expansion: int):
         super().__init__()
@@ -83,6 +99,7 @@ class AdaptiveCompressionExpansion(nn.Module):
         gated_expansion = (expanded * expansion_factors.unsqueeze(-1)).sum(dim=-2)
         return self.compression(gated_expansion)
 
+# Multimodal Fusion
 class MultimodalFusion(nn.Module):
     def __init__(self, text_dim: int, image_dim: int, audio_dim: int, output_dim: int):
         super().__init__()
@@ -99,6 +116,7 @@ class MultimodalFusion(nn.Module):
         fused, _ = self.cross_attn(text_proj, torch.stack([image_proj, audio_proj]))
         return self.fusion_layer(fused)
 
+# Enhanced Meta Learning
 class EnhancedMetaLearning(nn.Module):
     def __init__(self, model: nn.Module):
         super().__init__()
@@ -112,7 +130,7 @@ class EnhancedMetaLearning(nn.Module):
         for _ in range(steps):
             self.meta_optimizer.zero_grad()
             outputs = self.model(x_support, task_emb=task_emb)
-            loss = F.cross_entropy(outputs['output'], y_support)
+            loss = F.cross_entropy(outputs['output'].view(-1, outputs['output'].size(-1)), y_support.view(-1))
             loss.backward()
             self.meta_optimizer.step()
 
@@ -120,6 +138,7 @@ class EnhancedMetaLearning(nn.Module):
         task_emb = self.task_embedding(torch.tensor([task_id]))
         return self.model(x, task_emb=task_emb)
 
+# Self Supervised Pretraining
 class SelfSupervisedPretraining(nn.Module):
     def __init__(self, model: nn.Module, vocab_size: int):
         super().__init__()
@@ -146,6 +165,7 @@ class SelfSupervisedPretraining(nn.Module):
         labels = torch.arange(x.size(0)).to(x.device)
         return F.cross_entropy(similarity, labels)
 
+# Neuro Symbolic Reasoning
 class NeuroSymbolicReasoning(nn.Module):
     def __init__(self, dim: int, num_symbols: int, num_rules: int):
         super().__init__()
@@ -168,6 +188,7 @@ class NeuroSymbolicReasoning(nn.Module):
         reasoning_output = torch.matmul(F.softmax(rule_outputs, dim=-1), symbols)
         return x + reasoning_output
 
+# Ethical Reasoning Module
 class EthicalReasoningModule(nn.Module):
     def __init__(self, dim: int, num_principles: int):
         super().__init__()
@@ -184,6 +205,7 @@ class EthicalReasoningModule(nn.Module):
         ethically_adjusted_x = x * F.softmax(ethical_score.unsqueeze(-1), dim=1)
         return ethically_adjusted_x, ethical_score
 
+# Temporal Recursion Module
 class TemporalRecursionModule(nn.Module):
     def __init__(self, dim: int, num_steps: int):
         super().__init__()
@@ -200,6 +222,7 @@ class TemporalRecursionModule(nn.Module):
             outputs.append(temporal_state)
         return torch.stack(outputs, dim=1)
 
+# Multiversal Inference Engine
 class MultiversalInferenceEngine(nn.Module):
     def __init__(self, dim: int, num_universes: int):
         super().__init__()
@@ -211,6 +234,106 @@ class MultiversalInferenceEngine(nn.Module):
         selection_weights = F.softmax(self.universe_selection(x.mean(dim=1)), dim=-1)
         return (universe_outputs * selection_weights.unsqueeze(-1).unsqueeze(-1)).sum(dim=0)
 
+# New Quantum-Inspired Attention
+class QuantumInspiredAttention(nn.Module):
+    def __init__(self, dim, num_heads):
+        super().__init__()
+        self.dim = dim
+        self.num_heads = num_heads
+        self.head_dim = dim // num_heads
+        self.qkv = nn.Linear(dim, dim * 3)
+        self.proj = nn.Linear(dim, dim)
+
+    def forward(self, x):
+        B, N, C = x.shape
+        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
+        q, k, v = qkv.unbind(0)
+
+        # Quantum-inspired complex-valued attention
+        attn = (q @ k.transpose(-2, -1).conj()) * (1.0 / math.sqrt(self.head_dim))
+        attn = attn.softmax(dim=-1)
+        attn = attn + 1j * torch.rand_like(attn)  # Add imaginary component
+        
+        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
+        x = self.proj(x)
+        return x.real  # Return real part of the result
+
+# New Adaptive Architecture Module
+class AdaptiveArchitectureModule(nn.Module):
+    def __init__(self, dim, num_layers):
+        super().__init__()
+        self.dim = dim
+        self.num_layers = num_layers
+        self.layer_options = nn.ModuleList([
+            nn.Linear(dim, dim),
+            nn.Conv1d(dim, dim, kernel_size=3, padding=1),
+            nn.TransformerEncoderLayer(d_model=dim, nhead=8)
+        ])
+        self.layer_selector = nn.Linear(dim, len(self.layer_options))
+
+    def forward(self, x):
+        for _ in range(self.num_layers):
+            layer_weights = F.softmax(self.layer_selector(x.mean(dim=1)), dim=-1)
+            x = sum(layer(x) * weight for layer, weight in zip(self.layer_options, layer_weights.unbind(1)))
+        return x
+
+
+class ExplainableAIModule(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.attention = nn.MultiheadAttention(dim, num_heads=8)
+        self.feature_importance = nn.Linear(dim, 1)
+
+    def forward(self, x):
+        attn_output, attn_weights = self.attention(x, x, x)
+        feature_importance = self.feature_importance(attn_output).squeeze(-1)
+        return attn_output, attn_weights, feature_importance
+
+    def generate_explanation(self, x, attn_weights, feature_importance):
+        # Convert attention weights to numpy for easier manipulation
+        attn_weights_np = attn_weights.detach().cpu().numpy()
+        feature_importance_np = feature_importance.detach().cpu().numpy()
+
+        # Find the most important features
+        top_k = 5
+        top_features = feature_importance_np.argsort()[-top_k:][::-1]
+        
+        # Find the most attended-to positions
+        avg_attention = attn_weights_np.mean(axis=0)
+        top_attended = avg_attention.argsort()[-top_k:][::-1]
+
+        # Generate explanation
+        explanation = "Explanation of the model's decision:\n\n"
+
+        # Feature importance
+        explanation += "Top important features:\n"
+        for i, feature in enumerate(top_features):
+            importance = feature_importance_np[feature]
+            explanation += f"  {i+1}. Feature {feature}: Importance score {importance:.4f}\n"
+
+        # Attention analysis
+        explanation += "\nMost attended-to positions:\n"
+        for i, position in enumerate(top_attended):
+            attention = avg_attention[position]
+            explanation += f"  {i+1}. Position {position}: Average attention {attention:.4f}\n"
+
+        # Attention patterns
+        explanation += "\nAttention patterns:\n"
+        for i in range(attn_weights_np.shape[0]):  # For each attention head
+            head_attention = attn_weights_np[i]
+            max_attention = head_attention.max()
+            source, target = np.unravel_index(head_attention.argmax(), head_attention.shape)
+            explanation += f"  Head {i+1}: Strongest attention ({max_attention:.4f}) from position {source} to {target}\n"
+
+        # Overall summary
+        avg_importance = feature_importance_np.mean()
+        explanation += f"\nOverall, the model's decision is based on an average feature importance of {avg_importance:.4f}.\n"
+        explanation += f"The most critical feature (feature {top_features[0]}) has an importance score of {feature_importance_np[top_features[0]]:.4f}, "
+        explanation += f"which is {feature_importance_np[top_features[0]] / avg_importance:.2f} times the average.\n"
+
+        return explanation
+
+# Updated NeuroNexus Omega 
 class NeuroNexusOmega(nn.Module):
     def __init__(self, vocab_size: int, dim: int, n_qubits: int, n_layers: int, n_heads: int, max_seq_len: int):
         super().__init__()
@@ -226,8 +349,12 @@ class NeuroNexusOmega(nn.Module):
                 'compression_expansion': AdaptiveCompressionExpansion(dim, max_expansion=4),
                 'neuro_symbolic': NeuroSymbolicReasoning(dim, vocab_size // 10, 100),
                 'ethical_reasoning': EthicalReasoningModule(dim, 10),
+                'quantum_attention': QuantumInspiredAttention(dim, n_heads),  # New module
             }) for _ in range(n_layers)
         ])
+        
+        self.adaptive_architecture = AdaptiveArchitectureModule(dim, 3)  # New module
+        self.explainable_ai = ExplainableAIModule(dim)  # New module
         
         self.multimodal_fusion = MultimodalFusion(dim, dim, dim, dim)
         self.temporal_recursion = TemporalRecursionModule(dim, 5)
@@ -242,12 +369,17 @@ class NeuroNexusOmega(nn.Module):
         quantum_out = self.quantum_tensor_network(x)
         
         ethical_scores = []
+        attention_weights = []
         for layer in self.layers:
             x = layer['fractal_attention'](x)
             x = layer['compression_expansion'](x)
             x = layer['neuro_symbolic'](x)
             x, ethical_score = layer['ethical_reasoning'](x)
+            x = layer['quantum_attention'](x)
             ethical_scores.append(ethical_score)
+        
+        x = self.adaptive_architecture(x)
+        x, attn_weights, feature_importance = self.explainable_ai(x)
         
         if image is not None and audio is not None:
             x = self.multimodal_fusion(x, image, audio)
@@ -261,16 +393,16 @@ class NeuroNexusOmega(nn.Module):
             x = x + task_emb.unsqueeze(1)
         
         output = self.output(x)
+        explanation = self.explainable_ai.generate_explanation(x, attn_weights, feature_importance)
         
         return {
             'output': output,
             'hidden_state': x,
             'ethical_scores': torch.stack(ethical_scores, dim=1),
             'temporal_output': temporal_out,
-            'multiversal_output': multiversal_out
+            'multiversal_output': multiversal_out,
+            'explanation': explanation
         }
-
-   
 
     def pretrain(self, x: torch.Tensor, mlm_mask: torch.Tensor, nsp_x1: torch.Tensor, nsp_x2: torch.Tensor, nsp_labels: torch.Tensor, augmented_x: torch.Tensor):
         mlm_loss = self.self_supervised.masked_language_modeling(x, mlm_mask)
@@ -278,6 +410,7 @@ class NeuroNexusOmega(nn.Module):
         contrastive_loss = self.self_supervised.contrastive_learning(x, augmented_x)
         return mlm_loss + nsp_loss + contrastive_loss
 
+# Quantum Classical Optimizer
 class QuantumClassicalOptimizer(torch.optim.Optimizer):
     def __init__(self, params, lr=1e-3, momentum=0.9):
         defaults = dict(lr=lr, momentum=momentum)
@@ -314,6 +447,7 @@ class QuantumClassicalOptimizer(torch.optim.Optimizer):
 
         return loss
 
+# Training function
 def train_neuronexus_omega(model: NeuroNexusOmega, train_loader: torch.utils.data.DataLoader, num_epochs: int, device: torch.device):
     optimizer = QuantumClassicalOptimizer(model.parameters())
     model.to(device)
@@ -339,51 +473,22 @@ def train_neuronexus_omega(model: NeuroNexusOmega, train_loader: torch.utils.dat
         
         print(f"Epoch {epoch+1}/{num_epochs}, Loss: {total_loss/len(train_loader):.4f}")
 
-def meta_train_neuronexus_omega(model: NeuroNexusOmega, task_loader: torch.utils.data.DataLoader, num_epochs: int, device: torch.device):
-    meta_optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    model.to(device)
-
-    for epoch in range(num_epochs):
-        model.train()
-        total_meta_loss = 0
-        for task_batch in task_loader:
-            meta_optimizer.zero_grad()
-            task_losses = []
-            for task_id, (support_set, query_set) in enumerate(task_batch):
-                x_support, y_support = support_set
-                x_query, y_query = query_set
-                x_support, y_support = x_support.to(device), y_support.to(device)
-                x_query, y_query = x_query.to(device), y_query.to(device)
-                
-                model.meta_learning.adapt((x_support, y_support), task_id)
-                
-                with torch.no_grad():
-                    query_outputs = model.meta_learning(x_query, task_id)
-                    task_loss = F.cross_entropy(query_outputs['output'].view(-1, query_outputs['output'].size(-1)), y_query.view(-1))
-                task_losses.append(task_loss)
-            
-            meta_loss = torch.stack(task_losses).mean()
-            meta_loss.backward()
-            meta_optimizer.step()
-            
-            total_meta_loss += meta_loss.item()
-        
-        print(f"Meta Epoch {epoch+1}/{num_epochs}, Meta Loss: {total_meta_loss/len(task_loader):.4f}")
-
+# Main function to run the model
 def main():
-    vocab_size = 50000
-    dim = 1024
-    n_qubits = 100
-    n_layers = 12
-    n_heads = 16
-    max_seq_len = 512
-
-    model = NeuroNexusOmega(vocab_size, dim, n_qubits, n_layers, n_heads, max_seq_len)
+    model = NeuroNexusOmega(
+        vocab_size=Config.VOCAB_SIZE,
+        dim=Config.DIM,
+        n_qubits=Config.N_QUBITS,
+        n_layers=Config.N_LAYERS,
+        n_heads=Config.N_HEADS,
+        max_seq_len=Config.MAX_SEQ_LEN
+    )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    x = torch.randint(0, vocab_size, (1, 100))
-    image = torch.randn(1, 100, dim)
-    audio = torch.randn(1, 100, dim)
+    # Example usage (you would need to create actual data loaders for real training)
+    x = torch.randint(0, Config.VOCAB_SIZE, (1, 100))
+    image = torch.randn(1, 100, Config.DIM)
+    audio = torch.randn(1, 100, Config.DIM)
 
     output = model(x, image, audio)
 
@@ -392,21 +497,7 @@ def main():
     print(f"Ethical scores shape: {output['ethical_scores'].shape}")
     print(f"Temporal output shape: {output['temporal_output'].shape}")
     print(f"Multiversal output shape: {output['multiversal_output'].shape}")
-
-    mlm_mask = torch.randint(0, 2, (1, 100)).bool()
-    nsp_x1 = torch.randint(0, vocab_size, (1, 50))
-    nsp_x2 = torch.randint(0, vocab_size, (1, 50))
-    nsp_labels = torch.randint(0, 2, (1,))
-    augmented_x = torch.randint(0, vocab_size, (1, 100))
-
-    pretrain_loss = model.pretrain(x, mlm_mask, nsp_x1, nsp_x2, nsp_labels, augmented_x)
-    print(f"Pretraining loss: {pretrain_loss.item():.4f}")
-
-    support_set = (torch.randint(0, vocab_size, (5, 100)), torch.randint(0, vocab_size, (5,)))
-    model.meta_learning.adapt(support_set, task_id=0)
-
-    adapted_output = model.meta_learning(x, task_id=0)
-    print(f"Adapted output shape: {adapted_output['output'].shape}")
+    print(f"Explanation: {output['explanation']}")
 
 if __name__ == "__main__":
     main()
